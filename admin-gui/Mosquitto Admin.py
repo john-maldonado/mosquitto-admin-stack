@@ -74,6 +74,12 @@ tiles = [
         "key": "config",
     },
     {
+        "label": "MQTT Client",
+        "desc": "Subscribe to a topic and inspect the latest message received from the broker.",
+        "page": "pages/8_MQTT_Client.py",
+        "key": "mqtt_client",
+    },
+    {
         "label": "Reload / Restart",
         "desc": "Reload config (SIGHUP) or request a clean restart via trigger files.",
         "page": "pages/6_Reload_Broker.py",
