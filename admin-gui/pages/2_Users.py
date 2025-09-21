@@ -22,6 +22,11 @@ st.caption(
     "`/mosquitto/config/passwd_files`."
 )
 
+pending_select_key = "password_file_select_pending"
+pending_value = st.session_state.pop(pending_select_key, None)
+if pending_value is not None:
+    st.session_state["password_file_select"] = pending_value
+
 files = c.discover_password_files()
 if not files:
     st.warning(
@@ -61,7 +66,8 @@ with st.expander("Create new password file", expanded=not files):
             st.error(f"Could not create password file: {exc}")
         else:
             st.success(f"Created password file at {created_path}.")
-            st.session_state["password_file_select"] = created_path
+            st.session_state[pending_select_key] = created_path
+            st.session_state["new_pwfile_name"] = ""
             st.rerun()
 
 if not selected_entry:
