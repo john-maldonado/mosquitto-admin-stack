@@ -75,7 +75,8 @@ def sha256_file(path: str) -> Optional[str]:
         return None
 
 # ------------------------------ Metrics row ----------------------------------
-users = c.read_pw_users()
+password_files = c.discover_password_files()
+total_users = sum(entry.user_count for entry in password_files)
 sig_dir = getattr(c, "SIGNALS_DIR", "/signals")
 reload_ts = _mtime_str(os.path.join(sig_dir, "reload"))
 restart_ts = _mtime_str(os.path.join(sig_dir, "restart"))
@@ -85,7 +86,7 @@ mqtt_ok, mqtt_err = tcp_check("mosquitto", 1883)
 tls_ok, tls_err   = tls_check("mosquitto", 8883)
 
 col1, col2, col3, col4, col5, col6 = st.columns(6)
-col1.metric("Users", len(users))
+col1.metric("Users", total_users)
 col2.metric("MQTT 1883", "up" if mqtt_ok else "down")
 col3.metric("MQTT TLS 8883", "up" if tls_ok else "down")
 col4.metric("Server CA", "present" if _exists(c.CAFILE) else "missing")
@@ -98,6 +99,22 @@ if not mqtt_ok or not tls_ok:
             st.write(f"1883 error: {mqtt_err}")
         if not tls_ok:
             st.write(f"8883 error: {tls_err}")
+
+if password_files:
+    st.subheader("Password files")
+    table_rows = []
+    for entry in password_files:
+        table_rows.append(
+            {
+                "label": entry.label,
+                "path": entry.path,
+                "users": entry.user_count,
+                "exists": "yes" if entry.exists else "no",
+                "size_bytes": entry.size_bytes if entry.size_bytes is not None else "",
+                "modified_utc": entry.modified.strftime("%Y-%m-%d %H:%M:%S") if entry.modified else "",
+            }
+        )
+    st.dataframe(table_rows, use_container_width=True)
 
 # ------------------------- Signals / recent actions --------------------------
 st.subheader("Recent triggers")
@@ -194,6 +211,7 @@ paths = [
     ("CONFIG_DIR", c.MOSQUITTO_CONFIG_DIR),
     ("MOSQCONF", c.MOSQCONF),
     ("PWFILE", c.PWFILE),
+    ("PASSWD_FILES_DIR", c.PASSWD_FILES_DIR),
     ("ACLFILE", c.ACLFILE),
     ("CAFILE", c.CAFILE),
     ("CERTFILE", c.CERTFILE),

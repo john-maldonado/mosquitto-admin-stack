@@ -21,7 +21,7 @@ st.markdown(
     This Streamlit application provides a simple, file-backed admin UI for an
     Eclipse Mosquitto broker. It focuses on:
     - Local, file-based **admin authentication** (no external DB).
-    - Managing MQTT **users** (Mosquitto `pwfile`).
+    - Managing MQTT **users** (Mosquitto password files).
     - Generating **server TLS** credentials and optionally a **client CA**.
     - Editing `mosquitto.conf` directly in the browser.
     - Applying changes via **Reload** (SIGHUP) or **Restart** (SIGTERM) using a
@@ -66,6 +66,7 @@ st.code(
 SIGNALS_DIR          = {getattr(c, "SIGNALS_DIR", "/signals")}
 MOSQCONF             = {c.MOSQCONF}
 PWFILE               = {c.PWFILE}
+PASSWD_FILES_DIR     = {c.PASSWD_FILES_DIR}
 ACLFILE              = {c.ACLFILE}
 CAFILE               = {c.CAFILE}
 CERTFILE             = {c.CERTFILE}
@@ -80,7 +81,8 @@ st.markdown(
     **Where things live**
     - **Admin credentials** (UI login): stored in a file within `ADMIN_CONFIG_DIR`
       as `$7$` PBKDF2-SHA512 (Mosquitto-compatible).
-    - **MQTT users**: stored in `PWFILE` with `$7$` hashes; updated in-place.
+    - **MQTT users**: stored in `PWFILE` (default) or additional files under
+      `PASSWD_FILES_DIR`, all using `$7$` hashes.
     - **TLS artifacts**: written under `MOSQUITTO_CONFIG_DIR` (server CA, server cert/key,
       optional client CA).
     - **Signals**: files created in `SIGNALS_DIR` instruct the watcher to Reload/Restart.
