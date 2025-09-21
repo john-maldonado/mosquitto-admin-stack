@@ -1,0 +1,49 @@
+services:
+  mosquitto:
+    build:
+      context: ./mosquitto
+      dockerfile: Dockerfile
+    image: mosquitto-watcher:latest
+    container_name: mosquitto
+    restart: unless-stopped
+    stop_grace_period: 5s
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+      - mosquitto_config:/mosquitto/config:ro
+      - admin_signals:/signals     # NEW: shared signals volume
+    healthcheck:
+      test: ["CMD-SHELL", "pidof mosquitto >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  admin-gui:
+    build:
+      context: ./admin-gui
+    container_name: mosquitto-admin
+    restart: always                # restart admin as needed
+    ports:
+      - "8088:8088"
+    environment:
+      - ADMIN_CONFIG_DIR=/admin-gui/config
+      - MOSQUITTO_CONFIG_DIR=/mosquitto/config
+      - SIGNALS_DIR=/signals       # NEW: path to trigger files
+    volumes:
+      - admin_gui_config:/admin-gui/config
+      - mosquitto_config:/mosquitto/config:rw
+      - admin_signals:/signals     # NEW: shared signals volume
+    depends_on:
+      mosquitto:
+        condition: service_started
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  mosquitto_config:
+  admin_gui_config:
+  admin_signals:                   # NEW: create signal-volume

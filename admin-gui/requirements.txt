@@ -1,0 +1,7 @@
+# Streamlit based admin GUI does not need Flask or passlib. Streamlit provides
+# a full web app server and UI framework. We keep only the packages required
+# for the Streamlit interface and certificate generation.
+streamlit>=1.34
+
+# Added cryptography for generating self‑signed certificates in the admin GUI
+cryptography>=41.0.0
