@@ -18,6 +18,7 @@ if not c.require_login():
     st.stop()
 
 st.set_page_config(page_title="Client TLS", page_icon="🔏", layout="wide")
+c.set_active_page("client_tls")
 st.title("Client TLS (client authentication)")
 
 st.write(

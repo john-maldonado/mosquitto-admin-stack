@@ -17,6 +17,7 @@ if not c.require_login():
     st.stop()
 
 st.set_page_config(page_title="Config Editor", page_icon="📝", layout="wide")
+c.set_active_page("config_editor")
 st.title("Mosquitto Configuration Editor")
 
 # Initialize the text buffer in session state on first load

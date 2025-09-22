@@ -16,6 +16,7 @@ if not c.require_login():
     st.stop()
 
 st.set_page_config(page_title="Reload Broker", page_icon="♻️", layout="wide")
+c.set_active_page("reload_broker")
 st.title("Reload Mosquitto Broker")
 
 st.write(

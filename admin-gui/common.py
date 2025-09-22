@@ -18,8 +18,10 @@ import os
 import base64
 import hashlib
 import hmac
+import re
 import subprocess
 import signal
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from ipaddress import ip_address
 from typing import Callable, List, Tuple, Optional, Dict, Any
@@ -45,6 +47,9 @@ MOSQUITTO_CONFIG_DIR = os.environ.get("MOSQUITTO_CONFIG_DIR", "/config")
 
 # Path to the password file used by Mosquitto for MQTT user authentication.
 PWFILE = os.path.join(MOSQUITTO_CONFIG_DIR, "pwfile")
+
+# Directory that can hold additional password files for per-listener auth.
+PASSWD_FILES_DIR = os.path.join(MOSQUITTO_CONFIG_DIR, "passwd_files")
 
 # Paths to TLS and configuration artifacts.
 ACLFILE = os.path.join(MOSQUITTO_CONFIG_DIR, "aclfile")
@@ -81,6 +86,23 @@ log_type warning
 log_type notice
 log_type information
 """
+
+
+@dataclass
+class PasswordFileEntry:
+    """Metadata about a Mosquitto password file."""
+
+    path: str
+    label: str
+    is_default: bool
+    usernames: List[str]
+    exists: bool
+    size_bytes: Optional[int]
+    modified: Optional[datetime]
+
+    @property
+    def user_count(self) -> int:
+        return len(self.usernames)
 
 # -----------------------------------------------------------------------------
 # PBKDF2 helpers and admin credential management
@@ -194,14 +216,60 @@ def logout_button() -> None:
         st.success("Logged out.")
         st.rerun()
 
+
+def register_page_cleanup(page_key: str, callback: Callable[[], None]) -> None:
+    """Register a callback to run when the user leaves the given page."""
+
+    if not callable(callback):
+        raise ValueError("Callback must be callable.")
+
+    cleanups = st.session_state.get("page_cleanups")
+    if cleanups is None:
+        cleanups = {}
+        st.session_state["page_cleanups"] = cleanups
+    cleanups[page_key] = callback
+
+
+def set_active_page(page_key: str) -> None:
+    """Record the active page and trigger any cleanup for the previous page."""
+
+    previous = st.session_state.get("active_page")
+    if previous and previous != page_key:
+        cleanup = st.session_state.get("page_cleanups", {}).get(previous)
+        if cleanup:
+            try:
+                cleanup()
+            except Exception as exc:
+                st.warning(f"Error cleaning up page '{previous}': {exc}")
+
+    st.session_state["active_page"] = page_key
+
 # -----------------------------------------------------------------------------
 # User management helpers
 
-def read_pw_users() -> List[str]:
-    """Return a list of usernames defined in the Mosquitto password file."""
+_PW_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def _pw_permissions(path: str) -> None:
+    """Best-effort permissions adjustment for a password file."""
+
+    try:
+        subprocess.run(["chown", "1883:1883", path], check=False)
+    except Exception:
+        pass
+    try:
+        subprocess.run(["chmod", "0700", path], check=False)
+    except Exception:
+        pass
+
+
+def read_pw_users(path: Optional[str] = None) -> List[str]:
+    """Return a list of usernames defined in a Mosquitto password file."""
+
+    target = path or PWFILE
     users: List[str] = []
-    if os.path.exists(PWFILE):
-        with open(PWFILE, "r", encoding="utf-8") as f:
+    if os.path.exists(target):
+        with open(target, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or ":" not in line:
@@ -211,50 +279,99 @@ def read_pw_users() -> List[str]:
     return users
 
 
-def upsert_user(username: str, password: str) -> None:
-    """Add or update a user's entry in the password file."""
+def upsert_user(username: str, password: str, path: Optional[str] = None) -> None:
+    """Add or update a user's entry in the specified password file."""
+
+    target = path or PWFILE
     h = mosq_pbkdf2_sha512_hash(password, iterations=20000)
     lines: List[str] = []
-    if os.path.exists(PWFILE):
-        with open(PWFILE, "r", encoding="utf-8") as f:
+    if os.path.exists(target):
+        with open(target, "r", encoding="utf-8") as f:
             lines = [ln for ln in f.read().splitlines() if ln.strip()]
         # Remove any existing entry for this user
         lines = [ln for ln in lines if not ln.startswith(username + ":")]
     lines.append(f"{username}:{h}")
-    os.makedirs(os.path.dirname(PWFILE), exist_ok=True)
-    with open(PWFILE, "w", encoding="utf-8", newline="\n") as f:
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
-    # Adjust permissions (best effort)
-    try:
-        subprocess.run(["chown", "1883:1883", PWFILE], check=False)
-    except Exception:
-        pass
-    try:
-        subprocess.run(["chmod", "0700", PWFILE], check=False)
-    except Exception:
-        pass
+    if os.path.exists(target):
+        _pw_permissions(target)
 
 
-def delete_user(username: str) -> None:
-    """Remove a user from the password file if present."""
-    if not os.path.exists(PWFILE):
+def delete_user(username: str, path: Optional[str] = None) -> None:
+    """Remove a user from the specified password file if present."""
+
+    target = path or PWFILE
+    if not os.path.exists(target):
         return
-    with open(PWFILE, "r", encoding="utf-8") as f:
+    with open(target, "r", encoding="utf-8") as f:
         lines = [ln for ln in f.read().splitlines() if ln.strip()]
     lines = [ln for ln in lines if not ln.startswith(username + ":")]
-    with open(PWFILE, "w", encoding="utf-8", newline="\n") as f:
+    with open(target, "w", encoding="utf-8", newline="\n") as f:
         if lines:
             f.write("\n".join(lines) + "\n")
         else:
             f.truncate(0)
-    try:
-        subprocess.run(["chown", "1883:1883", PWFILE], check=False)
-    except Exception:
-        pass
-    try:
-        subprocess.run(["chmod", "0700", PWFILE], check=False)
-    except Exception:
-        pass
+    if os.path.exists(target):
+        _pw_permissions(target)
+
+
+def create_password_file(name: str) -> str:
+    """Create a new password file inside PASSWD_FILES_DIR and return its path."""
+
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise ValueError("Password file name is required.")
+    if not _PW_NAME_RE.fullmatch(cleaned):
+        raise ValueError("Use only letters, numbers, dots, underscores, or dashes.")
+    os.makedirs(PASSWD_FILES_DIR, exist_ok=True)
+    path = os.path.join(PASSWD_FILES_DIR, cleaned)
+    if os.path.exists(path):
+        raise FileExistsError(f"Password file '{cleaned}' already exists.")
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("")
+    _pw_permissions(path)
+    return path
+
+
+def _build_password_file_entry(path: str, label: str, is_default: bool) -> PasswordFileEntry:
+    usernames = read_pw_users(path)
+    exists = os.path.exists(path)
+    size_bytes: Optional[int] = None
+    modified: Optional[datetime] = None
+    if exists:
+        try:
+            size_bytes = os.path.getsize(path)
+        except OSError:
+            size_bytes = None
+        try:
+            modified = datetime.utcfromtimestamp(os.path.getmtime(path))
+        except OSError:
+            modified = None
+    return PasswordFileEntry(
+        path=path,
+        label=label,
+        is_default=is_default,
+        usernames=usernames,
+        exists=exists,
+        size_bytes=size_bytes,
+        modified=modified,
+    )
+
+
+def discover_password_files(include_default: bool = True) -> List[PasswordFileEntry]:
+    """Return metadata for known Mosquitto password files."""
+
+    entries: List[PasswordFileEntry] = []
+    if include_default:
+        entries.append(_build_password_file_entry(PWFILE, "pwfile (default)", True))
+    if os.path.isdir(PASSWD_FILES_DIR):
+        for name in sorted(os.listdir(PASSWD_FILES_DIR)):
+            full = os.path.join(PASSWD_FILES_DIR, name)
+            if not os.path.isfile(full):
+                continue
+            entries.append(_build_password_file_entry(full, f"passwd_files/{name}", False))
+    return entries
 
 # -----------------------------------------------------------------------------
 # TLS certificate generation

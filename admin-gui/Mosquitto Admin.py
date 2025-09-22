@@ -17,6 +17,7 @@ if not c.require_login():
 
 # --------------------------- Page config/title -------------------------------
 st.set_page_config(page_title="Mosquitto Admin", layout="wide")
+c.set_active_page("home")
 st.title("Mosquitto Admin")
 
 st.caption(
@@ -72,6 +73,12 @@ tiles = [
         "desc": "Edit `mosquitto.conf` and related files. Save to apply via Reload or Restart.",
         "page": "pages/5_Config_Editor.py",
         "key": "config",
+    },
+    {
+        "label": "MQTT Client",
+        "desc": "Subscribe to a topic and inspect the latest message received from the broker.",
+        "page": "pages/8_MQTT_Client.py",
+        "key": "mqtt_client",
     },
     {
         "label": "Reload / Restart",
