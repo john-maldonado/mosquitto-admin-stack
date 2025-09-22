@@ -13,6 +13,7 @@ if not c.require_login():
     st.stop()
 
 st.set_page_config(page_title="About", page_icon="ℹ️", layout="wide")
+c.set_active_page("about")
 st.title("About this Admin UI")
 
 st.markdown(

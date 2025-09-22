@@ -17,6 +17,7 @@ if not c.require_login():
 
 # --------------------------- Page config/title -------------------------------
 st.set_page_config(page_title="Mosquitto Admin", layout="wide")
+c.set_active_page("home")
 st.title("Mosquitto Admin")
 
 st.caption(

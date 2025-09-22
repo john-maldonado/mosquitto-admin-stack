@@ -216,6 +216,34 @@ def logout_button() -> None:
         st.success("Logged out.")
         st.rerun()
 
+
+def register_page_cleanup(page_key: str, callback: Callable[[], None]) -> None:
+    """Register a callback to run when the user leaves the given page."""
+
+    if not callable(callback):
+        raise ValueError("Callback must be callable.")
+
+    cleanups = st.session_state.get("page_cleanups")
+    if cleanups is None:
+        cleanups = {}
+        st.session_state["page_cleanups"] = cleanups
+    cleanups[page_key] = callback
+
+
+def set_active_page(page_key: str) -> None:
+    """Record the active page and trigger any cleanup for the previous page."""
+
+    previous = st.session_state.get("active_page")
+    if previous and previous != page_key:
+        cleanup = st.session_state.get("page_cleanups", {}).get(previous)
+        if cleanup:
+            try:
+                cleanup()
+            except Exception as exc:
+                st.warning(f"Error cleaning up page '{previous}': {exc}")
+
+    st.session_state["active_page"] = page_key
+
 # -----------------------------------------------------------------------------
 # User management helpers
 

@@ -15,6 +15,7 @@ if not c.require_login():
     st.stop()
 
 st.set_page_config(page_title="MQTT Users", page_icon="👥", layout="wide")
+c.set_active_page("users")
 st.title("MQTT Users")
 st.caption(
     "Manage Mosquitto password files and the MQTT accounts stored in them. "

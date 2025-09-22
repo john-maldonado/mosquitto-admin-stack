@@ -17,6 +17,7 @@ if not c.require_login():
     st.stop()
 
 st.set_page_config(page_title="Server TLS", page_icon="🔐", layout="wide")
+c.set_active_page("server_tls")
 st.title("Server TLS (broker identity)")
 
 # ----------------------------- helpers ----------------------------------------

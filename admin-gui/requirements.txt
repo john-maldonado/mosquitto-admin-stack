@@ -8,3 +8,5 @@ cryptography>=41.0.0
 
 # MQTT client support for the embedded subscriber utility
 paho-mqtt>=1.6.1
+
+streamlit-autorefresh>=1.0.1
